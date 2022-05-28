@@ -5,7 +5,7 @@ import numpy as np
 
 
 if __name__ == '__main__':
-    N = 3
+    N = 1
     R = np.arange(0.1,2,0.1)
     params = np.random.random(2*N)*2*np.pi
     energies = []
