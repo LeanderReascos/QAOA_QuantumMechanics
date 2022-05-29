@@ -115,8 +115,10 @@ class QAOA:
     def get_mixer(self,mixer):
         qc_init = QuantumCircuit(self.num_qubits)
         [qc_init.h(i) for i in range(self.num_qubits)]
+        #[qc_init.s(i) for i in range(self.num_qubits)]
         def qc_mix(beta):
             qc_mixer = QuantumCircuit(self.num_qubits)
+            #[qc_mixer.ry(beta,i) for i in range(self.num_qubits)]
             [qc_mixer.rx(beta,i) for i in range(self.num_qubits)]
             return qc_mixer
         return qc_init,qc_mix
