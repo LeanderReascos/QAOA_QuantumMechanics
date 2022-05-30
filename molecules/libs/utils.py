@@ -63,7 +63,6 @@ def compute_eh(n_qubits,c,h,alpha):
 
 class Quantum_System:
     def __init__(self,molecule,*args):
-        self.molecule_function = molecule
         self.molecule = molecule(*args)
         driver = ElectronicStructureMoleculeDriver(self.molecule, basis="sto3g", driver_type=ElectronicStructureDriverType.PYSCF)
         es_problem = ElectronicStructureProblem(driver)
@@ -75,9 +74,6 @@ class Quantum_System:
         numpy_solver = NumPyMinimumEigensolver()
         calc = GroundStateEigensolver(qubit_converter, numpy_solver)
         self.res = calc.solve(es_problem) 
-    
-    def calc_molecule(self,*args):
-        self.molecule = self.molecule_function(*args)
     
     def get_EvolutionOperator(self):
         def get_eH(alpha):
@@ -146,9 +142,9 @@ class QAOA:
 
 
 class SOLVER:
-    def __init__(self,R,molecule:Quantum_System,optimizer,n_cores):
+    def __init__(self,R,molecule_function,optimizer,n_cores):
         self.R = R
-        self.molecule = molecule
+        self.molecule = molecule_function
         self.optimizer = optimizer
         self.n_cores = n_cores
     
@@ -159,12 +155,13 @@ class SOLVER:
             R = np.ndarray((len(self.R),2), dtype=np.float64, buffer=smm.buf)
             params = np.random.random(2*self.N)*2*np.pi
             for i,r in enumerate(self.R[i_start:i_end]):
-                self.molecule.calc_molecule(r)
-                qaoa = QAOA(self.molecule.num_qubits,self.molecule.expval_HamiltonianOperator,self.molecule.get_EvolutionOperator(),N_layers=self.N)
+                molecule = Quantum_System(self.molecule,r)
+                qaoa = QAOA(molecule.num_qubits,molecule.expval_HamiltonianOperator,molecule.get_EvolutionOperator(),N_layers=self.N)
                 opt_var, opt_value, _ = self.optimizer.optimize(2*qaoa.N, qaoa.objective_function, initial_point=params)
-                R[i_start+i]=[qaoa.BEST_RESULT,self.molecule.res.eigenenergies[0]]
+                R[i_start+i][0]=qaoa.BEST_RESULT
+                R[i_start+i][1]=molecule.res.eigenenergies[0]
                 params = qaoa.BEST_PARAMS
-                print(f'    i: {i_start+i} - r: {r:.2f} Energy: {qaoa.BEST_RESULT,self.molecule.res.eigenenergies[0]}')
+                print(f'    i: {i_start+i} - r: {r:.2f} Energy: {qaoa.BEST_RESULT,molecule.res.eigenenergies[0]}')
             del R
         self.results = self.create_process(simulate)
         return self.results

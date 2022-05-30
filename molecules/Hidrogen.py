@@ -13,15 +13,14 @@ if __name__ == '__main__':
     args = sys.argv[1:]
     R = np.arange(0.1,2,0.1)
     optimizer = COBYLA()
-    Hidrogen = Quantum_System(hidrogen,R[0])
     n_cores = os.cpu_count()
 
     if args[0].upper() == 'S':
-        solver = SOLVER(R,Hidrogen,optimizer,n_cores)
+        solver = SOLVER(R,hidrogen,optimizer,n_cores)
         energies = solver.solve(int(args[1]))
 
     if args[0].upper() == 'O':
-        solver = SOLVER(R,Hidrogen,optimizer,n_cores)
+        solver = SOLVER(R,hidrogen,optimizer,n_cores)
         print(f'\nStart optimazation study for Hidogen molecule')
         print(f'\tNpoints: {len(R)}')
         study = OPTIMIZER(solver,N_max=1,trials=1)
