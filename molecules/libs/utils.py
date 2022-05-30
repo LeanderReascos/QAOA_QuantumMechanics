@@ -1,4 +1,3 @@
-from qiskit_nature.drivers import UnitsType, Molecule
 from qiskit_nature.drivers.second_quantization import (
     ElectronicStructureDriverType,
     ElectronicStructureMoleculeDriver,
@@ -11,6 +10,8 @@ from qiskit_nature.algorithms import GroundStateEigensolver
 
 from qiskit import QuantumCircuit,QuantumRegister, Aer, transpile
 import numpy as np
+
+from multiprocessing import Process, shared_memory
 
 def execute_circuit(qc, shots=1024, device=None):
     device = Aer.get_backend('qasm_simulator') if device is None else device
@@ -61,8 +62,9 @@ def compute_eh(n_qubits,c,h,alpha):
 
 
 class Quantum_System:
-    def __init__(self,geometry):
-        self.molecule = Molecule(geometry=geometry)
+    def __init__(self,molecule,*args):
+        self.molecule_function = molecule
+        self.molecule = molecule(*args)
         driver = ElectronicStructureMoleculeDriver(self.molecule, basis="sto3g", driver_type=ElectronicStructureDriverType.PYSCF)
         es_problem = ElectronicStructureProblem(driver)
         qubit_converter = QubitConverter(mapper=ParityMapper(), two_qubit_reduction=True)
@@ -73,6 +75,9 @@ class Quantum_System:
         numpy_solver = NumPyMinimumEigensolver()
         calc = GroundStateEigensolver(qubit_converter, numpy_solver)
         self.res = calc.solve(es_problem) 
+    
+    def calc_molecule(self,*args):
+        self.molecule = self.molecule_function(*args)
     
     def get_EvolutionOperator(self):
         def get_eH(alpha):
@@ -140,3 +145,50 @@ class QAOA:
         return result
 
 
+class SOLVER:
+    def __init__(self,R,molecule:Quantum_System,optimizer,n_cores):
+        self.R = R
+        self.molecule = molecule
+        self.optimizer = optimizer
+        self.n_cores = n_cores
+    
+    def solve(self,N=1):
+        self.N = N
+        print(f' N Layers: {N}')
+        def simulate(smm,i_start,i_end):
+            R = np.ndarray((len(self.R),2), dtype=np.float64, buffer=smm.buf)
+            params = np.random.random(2*self.N)*2*np.pi
+            for i,r in enumerate(self.R[i_start:i_end]):
+                self.molecule.calc_molecule(r)
+                qaoa = QAOA(self.molecule.num_qubits,self.molecule.expval_HamiltonianOperator,self.molecule.get_EvolutionOperator(),N_layers=self.N)
+                opt_var, opt_value, _ = self.optimizer.optimize(2*qaoa.N, qaoa.objective_function, initial_point=params)
+                R[i_start+i]=[qaoa.BEST_RESULT,self.molecule.res.eigenenergies[0]]
+                params = qaoa.BEST_PARAMS
+                print(f'    i: {i_start+i} - r: {r:.2f} Energy: {qaoa.BEST_RESULT,self.molecule.res.eigenenergies[0]}')
+            del R
+        self.results = self.create_process(simulate)
+        return self.results
+
+    def create_process(self,f):
+        results_ =  np.zeros((len(self.R),2),dtype=np.float64)
+        smm = shared_memory.SharedMemory(create=True,size=results_.nbytes)
+        results = np.ndarray(results_.shape, dtype=results_.dtype, buffer=smm.buf)
+        del results_
+        process = []
+        self.n_cores = self.n_cores if self.n_cores < len(self.R) else len(self.R)
+        print(f'\t\nCores: {self.n_cores}')
+        rs = len(self.R)//self.n_cores
+        for n in range(self.n_cores):
+            ns = (n+1)*rs if n < self.n_cores-1 else len(self.R)
+            p = Process(target=f, args=(smm,n*rs,ns))
+            p.start()
+            process.append(p)
+        
+        while len(process)>0:
+            p = process.pop(0)
+            p.join()
+        res = results.copy()
+        del results
+        smm.close()
+        smm.unlink()
+        return res
