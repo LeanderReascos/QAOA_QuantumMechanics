@@ -11,6 +11,10 @@ class OPTIMIZER:
         self.N_min = N_min
         self.N_max = N_max
         
+        with open('Hidrogen_VQE.energies','rb') as f:
+            self.energies = np.load(f)
+        self.vqe_result = np.mean(np.abs(self.energies[:,0]-self.energies[:,1]))
+        
         self.BEST_RESULT = np.inf
         self.BEST_PARAMS = None
         self.BEST_RESULTS = None
@@ -19,8 +23,10 @@ class OPTIMIZER:
         N = trial.suggest_int("N_layers", self.N_min, self.N_max)
         results = self.solver.solve(N)
         result = np.mean(np.abs(results[:,0]-results[:,1]))
+        result = np.abs(result-self.vqe_result)
 
         if result < self.BEST_RESULT:
+            print(f'\t -- VQE: {self.vqe_result} QAOA: {result}')
             self.BEST_RESULT = result
             self.BEST_RESULTS = results
             self.BEST_PARAMS = N
