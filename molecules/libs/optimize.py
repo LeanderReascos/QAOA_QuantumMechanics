@@ -23,7 +23,7 @@ class OPTIMIZER:
         N = trial.suggest_int("N_layers", self.N_min, self.N_max)
         results = self.solver.solve(N)
         result = np.mean(np.abs(results[:,0]-results[:,1]))
-        result = np.abs(result-self.vqe_result)
+        result = result-self.vqe_result
 
         if result < self.BEST_RESULT:
             print(f'\t -- VQE: {self.vqe_result} QAOA: {result}')

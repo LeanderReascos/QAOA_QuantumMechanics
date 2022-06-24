@@ -153,7 +153,7 @@ class Quantum_System:
         return res
     
 class QAOA:
-    def __init__(self,num_qubits,cost_function,e_H,n_cores,mixer='Uniform',N_layers=1):
+    def __init__(self,num_qubits,cost_function,e_H,n_cores,mixer='Rx',N_layers=1):
         self.num_qubits = num_qubits
         self.mixer = mixer if type(mixer) is not str else self.get_mixer(mixer)
         self.N = N_layers
@@ -167,9 +167,14 @@ class QAOA:
     def get_mixer(self,mixer):
         qc_init = QuantumCircuit(self.num_qubits)
         [qc_init.h(i) for i in range(self.num_qubits)]
+        if mixer == 'Ry':
+            [qc_init.s(i) for i in range(self.num_qubits)]
         def qc_mix(beta):
             qc_mixer = QuantumCircuit(self.num_qubits)
-            [qc_mixer.rx(beta,i) for i in range(self.num_qubits)]
+            if mixer == 'Rx':
+                [qc_mixer.rx(beta,i) for i in range(self.num_qubits)]
+            if mixer == 'Ry':
+                [qc_mixer.ry(beta,i) for i in range(self.num_qubits)]
             return qc_mixer
         return qc_init,qc_mix
 
@@ -190,13 +195,18 @@ class QAOA:
             self.BEST_RESULT = result
             self.BEST_PARAMS = parameters
         return result
+    
+    def save_QASM(self):
+        qc = self.QAOA(self.BEST_PARAMS)
+        qc.qasm(filename='QAOA.qasm')
 
 
 class SOLVER:
-    def __init__(self,R,molecule_function,optimizer,n_cores):
+    def __init__(self,R,molecule_function,optimizer,n_cores,mixer='Rx'):
         self.R = R
         self.molecule = molecule_function
         self.optimizer = optimizer
+        self.mixer = mixer
         self.n_cores = n_cores if n_cores>1 else 1
         self.n_Qcores = 1#n_cores if n_cores>1 else 1
     
@@ -207,8 +217,9 @@ class SOLVER:
             params = np.random.random(2*self.N)*2*np.pi
             for i,r in enumerate(self.R[i_start:i_end]):
                 molecule = Quantum_System(self.molecule,r)
-                qaoa = QAOA(molecule.num_qubits,molecule.expval_HamiltonianOperator,molecule.get_EvolutionOperator(),self.n_Qcores,N_layers=self.N)
+                qaoa = QAOA(molecule.num_qubits, molecule.expval_HamiltonianOperator, molecule.get_EvolutionOperator(), self.n_Qcores, N_layers=self.N, mixer = self.mixer)
                 opt_var, opt_value, _ = self.optimizer.optimize(2*qaoa.N, qaoa.objective_function, initial_point=params)
+                qaoa.save_QASM()
                 R[i_start+i][0]=qaoa.BEST_RESULT
                 R[i_start+i][1]=np.real(molecule.res.eigenenergies[0])
                 params = qaoa.BEST_PARAMS

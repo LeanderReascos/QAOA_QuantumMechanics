@@ -14,7 +14,7 @@ def hidrogen(r):
 if __name__ == '__main__':
 
     args = sys.argv[1:]
-    R = np.arange(0.1,2,0.1)
+    R = np.arange(1.9,2,0.1)
     optimizer = COBYLA()
     n_cores = os.cpu_count()
     t_start = time.time()
@@ -24,16 +24,22 @@ if __name__ == '__main__':
                   'N points': len(R)}
 
     if args[0].upper() == 'S':
+        if len(args[1:]) < 2:
+            print('Not enough arguments')
+            exit()
         parameters['Operation'] = 'Solve'
         N_layers = int(args[1])
+        mixer = args[2]
         parameters['N Layers'] = N_layers
+        type_solution = f'Solve_{mixer}{N_layers}'
         header('Hidrogen', parameters)
-        solver = SOLVER(R,hidrogen,optimizer,n_cores)
+        solver = SOLVER(R,hidrogen,optimizer,n_cores,mixer)
         energies = solver.solve(N_layers)
     
     if args[0].upper() == 'V':
         parameters['Operation'] = 'VQE'
         header('Hidrogen', parameters)
+        type_solution = f'VQE'
         energies = []
         for r in R:
             H = Quantum_System(hidrogen,r)
@@ -54,6 +60,6 @@ if __name__ == '__main__':
     
     footer(t_start,time.time())
 
-    with open('Hidrogen_VQE.energies','wb') as f:
+    with open(f'Hidrogen_{type_solution}.energies','wb') as f:
         np.save(f,energies)
     
